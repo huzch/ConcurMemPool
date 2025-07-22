@@ -1,9 +1,7 @@
+#pragma once
 #include <sys/mman.h>
 
-#include <iostream>
-#include <vector>
-using std::cout;
-using std::endl;
+#include "Common.h"
 
 // 直接去堆上按页申请空间
 inline static void *SystemAlloc(size_t kpage) {
@@ -34,10 +32,10 @@ class ObjectPool {
 
     if (_freeList) {  // 利用空闲回收内存
       obj = (T *)_freeList;
-      _freeList = *(void **)obj;
+      _freeList = Next(obj);
     } else {  // 利用申请内存
       if (_remainBytes < sizeof(T)) {
-        _remainBytes = 128 << 12;
+        _remainBytes = 128 << 12;  // 一次申请128页
         // 此处会直接丢弃小于对象大小的剩余内存，会造成内存泄漏（后续等待修补）
         _memory = (char *)SystemAlloc(_remainBytes);
         if (_memory == nullptr) {
@@ -60,7 +58,7 @@ class ObjectPool {
     obj->~T();  // 调用析构函数清理对象资源
 
     // 在回收内存的头部存储指针，将所有回收内存链接起来
-    *(void **)obj = _freeList;  // 指针大小兼容32位和64位平台
+    Next(obj) = _freeList;
     _freeList = obj;
   }
 
@@ -69,51 +67,3 @@ class ObjectPool {
   size_t _remainBytes = 0;    // 大块分配内存的剩余字节数
   void *_freeList = nullptr;  // 回收内存
 };
-
-//-----------------------测试--------------------------
-
-struct TreeNode {
-  int _val;
-  TreeNode *_left;
-  TreeNode *_right;
-  TreeNode() : _val(0), _left(nullptr), _right(nullptr) {}
-};
-
-void TestObjectPool() {
-  const size_t Rounds = 3;  // 申请轮次
-  const size_t N = 100000;  // 每轮申请次数
-
-  std::vector<TreeNode *> v1;
-  v1.reserve(N);
-
-  size_t begin1 = clock();
-  for (size_t j = 0; j < Rounds; ++j) {
-    for (int i = 0; i < N; ++i) {
-      v1.push_back(new TreeNode);
-    }
-    for (int i = 0; i < N; ++i) {
-      delete v1[i];
-    }
-    v1.clear();
-  }
-  size_t end1 = clock();
-
-  ObjectPool<TreeNode> TNPool;
-  std::vector<TreeNode *> v2;
-  v2.reserve(N);
-
-  size_t begin2 = clock();
-  for (size_t j = 0; j < Rounds; ++j) {
-    for (int i = 0; i < N; ++i) {
-      v2.push_back(TNPool.New());
-    }
-    for (int i = 0; i < N; ++i) {
-      TNPool.Delete(v2[i]);
-    }
-    v2.clear();
-  }
-  size_t end2 = clock();
-
-  cout << "new cost time:" << end1 - begin1 << endl;
-  cout << "object pool cost time:" << end2 - begin2 << endl;
-}
