@@ -47,7 +47,7 @@ void TestObjectPool() {
   cout << "object pool cost time:" << end2 - begin2 << endl;
 }
 
-void TestConcurAlloc() {
+void TestConcurAlloc1() {
   std::thread t1([]() {
     for (size_t i = 0; i < 5; ++i) {
       ConcurAlloc(6);
@@ -62,6 +62,13 @@ void TestConcurAlloc() {
 
   t1.join();
   t2.join();
+}
+
+void TestConcurAlloc() {
+  ConcurAlloc(6);
+  ConcurAlloc(7);
+  ConcurAlloc(1);
+  ConcurAlloc(3);
 }
 
 int main() {

@@ -1,35 +1,92 @@
 #pragma once
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/mman.h>
+#endif
+
+#include <algorithm>
 #include <cassert>
 #include <iostream>
+#include <mutex>
 #include <thread>
 #include <vector>
 using std::cout;
 using std::endl;
 
-static const int FREELIST_NUM = 256;
+static const size_t MAX_BYTES = 256 << 10;
+static const size_t LIST_NUM = 256;
+static const size_t PAGE_NUM = 129;
+static const size_t PAGE_SHIFT = 13;
+
+// 直接去堆上按页申请空间
+inline static void* SystemAlloc(size_t pages) {
+#ifdef _WIN32
+#include <windows.h>
+  void* ptr = VirtualAlloc(0, pages << 12, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+#else  // linux/macOS下用mmap分配内存
+#include <sys/mman.h>
+  void* ptr =
+      mmap(nullptr, pages << 12, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (ptr == MAP_FAILED) {
+    ptr = nullptr;
+  }
+#endif
+  if (ptr == nullptr) {
+    throw std::bad_alloc();
+  }
+  return ptr;
+}
 
 // 指针大小兼容32位和64位平台
 static void*& Next(void* obj) { return *(void**)obj; }
 
+// 以小块内存（对象）为单位的单向链表
 class FreeList {
  public:
   void Push(void* obj) {
+    assert(obj);
     Next(obj) = _freeList;
     _freeList = obj;
+    ++_size;
   }
 
   void* Pop() {
     void* obj = _freeList;
     _freeList = Next(obj);
+    --_size;
     return obj;
+  }
+
+  void PushRange(void* start, void* end, size_t n) {
+    assert(start && end);
+    Next(end) = _freeList;
+    _freeList = start;
+    _size += n;
+  }
+
+  // 输出型参数
+  void PopRange(void*& start, void*& end, size_t n) {
+    start = end = _freeList;
+    for (size_t i = 0; i < n - 1; ++i) {
+      end = Next(end);
+    }
+    _freeList = Next(end);
+    Next(end) = nullptr;
+    _size -= n;
   }
 
   bool Empty() { return _freeList == nullptr; }
 
+  size_t& GetMaxSize() { return _maxSize; }
+
  private:
   void* _freeList = nullptr;
+  size_t _size = 0;
+  size_t _maxSize = 1;  // 慢启动上限
 };
 
+// 字节对齐和哈希桶映射规则
 class SizeMap {
  public:
   //  由于只用8byte对齐会导致桶数太多，所以采用分段对齐，在保证内碎片不大幅增加的情况下，减少桶数
@@ -71,11 +128,34 @@ class SizeMap {
     } else if (bytes <= (64 << 10)) {
       return _Index(bytes - (8 << 10), 10) + groups[0] + groups[1] + groups[2];
     } else if (bytes <= (256 << 10)) {
-      return _Index(bytes - (64 << 10), 13) + groups[0] + groups[1] +
-             groups[2] + groups[3];
+      return _Index(bytes - (64 << 10), 13) + groups[0] + groups[1] + groups[2] + groups[3];
     } else {
       assert(false);
     }
+  }
+
+  // 输入对象大小，输出（从CentralCache到ThreadCache）对象移动数量
+  static size_t ObjectMoveNum(size_t objSize) {
+    assert(objSize <= MAX_BYTES);
+    // 慢启动上限
+    size_t objNum = MAX_BYTES / objSize;
+    if (objNum < 2) {
+      objNum = 2;
+    } else if (objNum > 512) {
+      objNum = 512;
+    }
+    return objNum;
+  }
+
+  // 输入对象大小，输出（从PageHeap到CentralCache）页移动数量
+  static size_t PageMoveNum(size_t objSize) {
+    assert(objSize <= MAX_BYTES);
+    size_t objNum = ObjectMoveNum(objSize);
+    size_t pageNum = (objNum * objSize) >> PAGE_SHIFT;
+    if (pageNum == 0) {
+      pageNum = 1;
+    }
+    return pageNum;
   }
 
  private:
@@ -104,4 +184,66 @@ class SizeMap {
   static size_t _Index(size_t bytes, size_t alignShift) {
     return ((bytes + (1 << alignShift) - 1) >> alignShift) - 1;
   }
+};
+
+// 以页为单位的连续大块内存
+struct Span {
+  // 采用uintptr_t兼容32位和64位平台
+  uintptr_t _start = 0;  // 起始页号
+  uintptr_t _size = 0;   // 页的数量
+
+  // 双向链表
+  Span* _prev = nullptr;
+  Span* _next = nullptr;
+
+  size_t _objSize = 0;        // 对象大小
+  size_t _useCount = 0;       // 对象分配数量
+  void* _freeList = nullptr;  // 对象空闲链表
+
+  bool _isUsed = false;  // Span是否被使用
+};
+
+// 以大块内存为单位的双向链表
+class SpanList {
+ public:
+  SpanList() : _head(new Span) {
+    _head->_prev = _head;
+    _head->_next = _head;
+  }
+
+  Span* Begin() { return _head->_next; }
+
+  Span* End() { return _head; }
+
+  void PushFront(Span* span) { Insert(Begin(), span); }
+
+  Span* PopFront() { return Remove(Begin()); }
+
+  void Insert(Span* pos, Span* span) {
+    assert(pos && span);
+    Span* prev = pos->_prev;
+
+    prev->_next = span;
+    span->_prev = prev;
+    span->_next = pos;
+    pos->_prev = span;
+  }
+
+  Span* Remove(Span* pos) {
+    assert(pos && pos != _head);
+    Span* prev = pos->_prev;
+    Span* next = pos->_next;
+
+    prev->_next = next;
+    next->_prev = prev;
+    return pos;
+  }
+
+  bool Empty() { return _head == _head->_next; }
+
+  std::mutex& GetMutex() { return _mutex; }
+
+ private:
+  Span* _head;        // 哨兵位
+  std::mutex _mutex;  // 桶锁
 };

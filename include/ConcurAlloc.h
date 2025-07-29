@@ -3,6 +3,7 @@
 
 // 以下函数用于配合线程并发测试
 void* ConcurAlloc(size_t bytes) {
+  assert(bytes <= MAX_BYTES);
   if (pThreadCache == nullptr) {
     pThreadCache = new ThreadCache;
   }
@@ -10,4 +11,7 @@ void* ConcurAlloc(size_t bytes) {
   return pThreadCache->Allocate(bytes);
 }
 
-void ConcurFree() {};
+void ConcurFree(void* ptr, size_t bytes) {
+  assert(ptr);
+  pThreadCache->Deallocate(ptr, bytes);
+};

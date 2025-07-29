@@ -1,26 +1,5 @@
 #pragma once
-#include <sys/mman.h>
-
 #include "Common.h"
-
-// 直接去堆上按页申请空间
-inline static void *SystemAlloc(size_t kpage) {
-#ifdef _WIN32
-  void *ptr = VirtualAlloc(0, kpage * (1 << 12), MEM_COMMIT | MEM_RESERVE,
-                           PAGE_READWRITE);
-#else
-  // linux/macOS下用mmap分配内存
-  void *ptr = mmap(nullptr, kpage * (1 << 12), PROT_READ | PROT_WRITE,
-                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (ptr == MAP_FAILED) {
-    ptr = nullptr;
-  }
-#endif
-  if (ptr == nullptr) {
-    throw std::bad_alloc();
-  }
-  return ptr;
-}
 
 // 针对不同大小的特定对象的定长内存池
 template <class T>
@@ -55,6 +34,7 @@ class ObjectPool {
   }
 
   void Delete(T *obj) {
+    assert(obj);
     obj->~T();  // 调用析构函数清理对象资源
 
     // 在回收内存的头部存储指针，将所有回收内存链接起来
