@@ -4,16 +4,18 @@
 // 单例模式 -- 懒汉式
 class PageHeap {
  public:
-  static PageHeap& GetInstance() {
+  static PageHeap& Instance() {
     // Magic Static，局部静态变量初始化时保证线程安全
     static PageHeap instance;
     return instance;
   }
 
+  // 与CentralCache交互
   Span* New(size_t pages);
   void Delete(Span* span);
 
-  std::mutex& GetMutex();
+  Span* ObjectToSpan(void* obj);
+  std::mutex& Mutex();
 
  private:
   PageHeap() {}
@@ -22,5 +24,6 @@ class PageHeap {
 
  private:
   SpanList _spanLists[PAGE_NUM];
+  std::unordered_map<uintptr_t, Span*> _idSpanMap;  //<页号,Span*>
   std::mutex _mutex;
 };

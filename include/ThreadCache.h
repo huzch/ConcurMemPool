@@ -7,9 +7,8 @@ class ThreadCache {
   void* Allocate(size_t bytes);
   void Deallocate(void* ptr, size_t bytes);
   // 与CentralCache交互
-  void* FetchFromCentralCache(size_t index, size_t bytes);
-  void ReleaseToCentralCache();
-  void ListTooLong();
+  void* FetchFromCentralCache(FreeList& list, size_t objSize);
+  void ReleaseToCentralCache(FreeList& list, size_t objSize);
 
  private:
   FreeList _freeLists[LIST_NUM];

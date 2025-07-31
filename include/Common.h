@@ -10,6 +10,7 @@
 #include <iostream>
 #include <mutex>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 using std::cout;
 using std::endl;
@@ -22,10 +23,8 @@ static const size_t PAGE_SHIFT = 13;
 // 直接去堆上按页申请空间
 inline static void* SystemAlloc(size_t pages) {
 #ifdef _WIN32
-#include <windows.h>
   void* ptr = VirtualAlloc(0, pages << 12, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 #else  // linux/macOS下用mmap分配内存
-#include <sys/mman.h>
   void* ptr =
       mmap(nullptr, pages << 12, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (ptr == MAP_FAILED) {
@@ -38,7 +37,7 @@ inline static void* SystemAlloc(size_t pages) {
   return ptr;
 }
 
-// 指针大小兼容32位和64位平台
+// 在每个内存块（对象）头部存储指针，指针大小兼容32位和64位平台
 static void*& Next(void* obj) { return *(void**)obj; }
 
 // 以小块内存（对象）为单位的单向链表
@@ -66,19 +65,24 @@ class FreeList {
   }
 
   // 输出型参数
-  void PopRange(void*& start, void*& end, size_t n) {
+  size_t PopRange(void*& start, void*& end, size_t n) {
     start = end = _freeList;
-    for (size_t i = 0; i < n - 1; ++i) {
+    size_t actualNum = 1;
+    for (size_t i = 0; i < n - 1 && Next(end) != nullptr; ++i) {
       end = Next(end);
+      ++actualNum;
     }
     _freeList = Next(end);
     Next(end) = nullptr;
-    _size -= n;
+    _size -= actualNum;
+    return actualNum;
   }
 
   bool Empty() { return _freeList == nullptr; }
 
-  size_t& GetMaxSize() { return _maxSize; }
+  size_t& Size() { return _size; }
+
+  size_t& MaxSize() { return _maxSize; }
 
  private:
   void* _freeList = nullptr;
@@ -200,7 +204,7 @@ struct Span {
   size_t _useCount = 0;       // 对象分配数量
   void* _freeList = nullptr;  // 对象空闲链表
 
-  bool _isUsed = false;  // Span是否被使用
+  bool _inUse = false;  // Span是否被使用
 };
 
 // 以大块内存为单位的双向链表
@@ -241,7 +245,7 @@ class SpanList {
 
   bool Empty() { return _head == _head->_next; }
 
-  std::mutex& GetMutex() { return _mutex; }
+  std::mutex& Mutex() { return _mutex; }
 
  private:
   Span* _head;        // 哨兵位

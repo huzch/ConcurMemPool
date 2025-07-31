@@ -64,15 +64,20 @@ void TestConcurAlloc1() {
   t2.join();
 }
 
-void TestConcurAlloc() {
-  ConcurAlloc(6);
-  ConcurAlloc(7);
-  ConcurAlloc(1);
-  ConcurAlloc(3);
+void TestConcurAlloc2() {
+  void *p1 = ConcurAlloc(6);
+  void *p2 = ConcurAlloc(7);
+  void *p3 = ConcurAlloc(1);
+  void *p4 = ConcurAlloc(3);
+
+  ConcurFree(p1, 6);
+  ConcurFree(p2, 7);
+  ConcurFree(p3, 1);
+  ConcurFree(p4, 3);
 }
 
 int main() {
   // TestObjectPool();
-  TestConcurAlloc();
+  TestConcurAlloc1();
   return 0;
 }
