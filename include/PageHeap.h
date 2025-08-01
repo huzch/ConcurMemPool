@@ -23,7 +23,7 @@ class PageHeap {
   PageHeap& operator=(const PageHeap&) = delete;
 
  private:
-  SpanList _spanLists[PAGE_NUM];
+  SpanList _spanLists[PAGE_NUM + 1];
   std::unordered_map<uintptr_t, Span*> _idSpanMap;  //<页号,Span*>
   std::mutex _mutex;
 };

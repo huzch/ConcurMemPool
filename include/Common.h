@@ -17,10 +17,10 @@ using std::endl;
 
 static const size_t MAX_BYTES = 256 << 10;
 static const size_t LIST_NUM = 256;
-static const size_t PAGE_NUM = 129;
+static const size_t PAGE_NUM = 128;
 static const size_t PAGE_SHIFT = 13;
 
-// 直接去堆上按页申请空间
+// 向堆申请空间
 inline static void* SystemAlloc(size_t pages) {
 #ifdef _WIN32
   void* ptr = VirtualAlloc(0, pages << 12, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
@@ -35,6 +35,15 @@ inline static void* SystemAlloc(size_t pages) {
     throw std::bad_alloc();
   }
   return ptr;
+}
+
+// 向堆释放空间
+inline static void SystemFree(void* ptr, size_t bytes) {
+#ifdef _WIN32
+  VirtualFree(ptr, 0, MEM_RELEASE);
+#else  // linux/macOS下用munmap分配内存
+  munmap(ptr, bytes);
+#endif
 }
 
 // 在每个内存块（对象）头部存储指针，指针大小兼容32位和64位平台
@@ -114,7 +123,7 @@ class SizeMap {
     } else if (bytes <= (256 << 10)) {
       return _RoundUp(bytes, 8 << 10);
     } else {
-      assert(false);
+      return _RoundUp(bytes, 1 << PAGE_SHIFT);
     }
   }
 

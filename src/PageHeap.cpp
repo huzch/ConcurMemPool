@@ -10,7 +10,7 @@ Span* PageHeap::New(size_t pages) {
     return _spanLists[pages].PopFront();
   } else {
     // 向后寻找大Span(n)，将其切成Span(k)和Span(n-k)
-    for (size_t i = pages + 1; i < PAGE_NUM; ++i) {
+    for (size_t i = pages + 1; i <= PAGE_NUM; ++i) {
       if (!_spanLists[i].Empty()) {
         Span* kSpan = new Span;                  // k页
         Span* nSpan = _spanLists[i].PopFront();  // n页
@@ -34,11 +34,11 @@ Span* PageHeap::New(size_t pages) {
   }
 
   // 若全为空，则向系统申请一个大Span
-  void* ptr = SystemAlloc(PAGE_NUM - 1);
+  void* ptr = SystemAlloc(PAGE_NUM);
   Span* hugeSpan = new Span;
 
   hugeSpan->_start = (uintptr_t)ptr >> PAGE_SHIFT;
-  hugeSpan->_size = PAGE_NUM - 1;
+  hugeSpan->_size = PAGE_NUM;
   // 标记首尾页映射
   _idSpanMap[hugeSpan->_start] = hugeSpan;
   _idSpanMap[hugeSpan->_start + hugeSpan->_size - 1] = hugeSpan;
@@ -60,7 +60,7 @@ void PageHeap::Delete(Span* span) {
     Span* prevSpan = _idSpanMap[prevId];
     if (prevSpan->_inUse) {
       break;
-    } else if (prevSpan->_size + span->_size > PAGE_NUM - 1) {
+    } else if (prevSpan->_size + span->_size > PAGE_NUM) {
       break;
     }
 
@@ -82,7 +82,7 @@ void PageHeap::Delete(Span* span) {
     Span* nextSpan = _idSpanMap[nextId];
     if (nextSpan->_inUse) {
       break;
-    } else if (nextSpan->_size + span->_size > PAGE_NUM - 1) {
+    } else if (nextSpan->_size + span->_size > PAGE_NUM) {
       break;
     }
 
