@@ -12,6 +12,7 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
 using std::cout;
 using std::endl;
 
@@ -23,10 +24,10 @@ static const size_t PAGE_SHIFT = 13;
 // 向堆申请空间
 inline static void* SystemAlloc(size_t pages) {
 #ifdef _WIN32
-  void* ptr = VirtualAlloc(0, pages << 12, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+  void* ptr = VirtualAlloc(0, pages << PAGE_SHIFT, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 #else  // linux/macOS下用mmap分配内存
-  void* ptr =
-      mmap(nullptr, pages << 12, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void* ptr = mmap(nullptr, pages << PAGE_SHIFT, PROT_READ | PROT_WRITE,
+                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (ptr == MAP_FAILED) {
     ptr = nullptr;
   }
@@ -216,10 +217,13 @@ struct Span {
   bool _inUse = false;  // Span是否被使用
 };
 
+#include "ObjectPool.hpp"
+static ObjectPool<Span> spanPool;
+
 // 以大块内存为单位的双向链表
 class SpanList {
  public:
-  SpanList() : _head(new Span) {
+  SpanList() : _head(spanPool.New()) {
     _head->_prev = _head;
     _head->_next = _head;
   }

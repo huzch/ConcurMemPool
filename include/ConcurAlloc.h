@@ -1,4 +1,5 @@
 #pragma once
+#include "Common.h"
 #include "PageHeap.h"
 #include "ThreadCache.h"
 
@@ -7,7 +8,7 @@ void* ConcurAlloc(size_t bytes) {
   // 小于256KB内存，缓存架构申请
   if (bytes <= MAX_BYTES) {
     if (pThreadCache == nullptr) {
-      pThreadCache = new ThreadCache;
+      pThreadCache = tcPool.New();
     }
     cout << std::this_thread::get_id() << ":" << pThreadCache << endl;
     return pThreadCache->Allocate(bytes);
