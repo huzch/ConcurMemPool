@@ -11,12 +11,12 @@ class ObjectPool {
 
     if (_freeList) {  // 利用空闲回收内存
       obj = (T *)_freeList;
-      _freeList = Next(obj);
+      _freeList = FreeList::Next(obj);
     } else {  // 利用申请内存
       if (_remainBytes < sizeof(T)) {
         _remainBytes = 16 << PAGE_SHIFT;  // 一次申请16页
         // 此处会直接丢弃小于对象大小的剩余内存，会造成内存泄漏（后续等待修补）
-        _memory = (char *)SystemAlloc(16);
+        _memory = (char *)SystemAllocator::Alloc(16);
         if (_memory == nullptr) {
           throw std::bad_alloc();
         }
@@ -38,7 +38,7 @@ class ObjectPool {
     obj->~T();  // 调用析构函数清理对象资源
 
     // 在回收内存的头部存储指针，将所有回收内存链接起来
-    Next(obj) = _freeList;
+    FreeList::Next(obj) = _freeList;
     _freeList = obj;
   }
 

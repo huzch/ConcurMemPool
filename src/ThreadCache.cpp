@@ -1,7 +1,6 @@
 #include "ThreadCache.h"
 
 #include "CentralCache.h"
-#include "Common.h"
 
 void* ThreadCache::Allocate(size_t bytes) {
   assert(bytes <= MAX_BYTES);
@@ -17,7 +16,6 @@ void* ThreadCache::Allocate(size_t bytes) {
   }
 }
 
-// 后续会优化，函数只用传入指针
 void ThreadCache::Deallocate(void* ptr, size_t bytes) {
   assert(ptr);
   assert(bytes <= MAX_BYTES);

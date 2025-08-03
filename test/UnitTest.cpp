@@ -70,10 +70,10 @@ void TestConcurAlloc2() {
   void *p3 = ConcurAlloc(1);
   void *p4 = ConcurAlloc(3);
 
-  ConcurFree(p1, 6);
-  ConcurFree(p2, 7);
-  ConcurFree(p3, 1);
-  ConcurFree(p4, 3);
+  ConcurFree(p1);
+  ConcurFree(p2);
+  ConcurFree(p3);
+  ConcurFree(p4);
 }
 
 int main() {

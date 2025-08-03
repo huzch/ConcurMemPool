@@ -16,6 +16,8 @@ build/%.o: test/%.cpp
 $(TARGET): $(OBJ)
 	$(CXX) $(CXXFLAGS) $(OBJ) -o $(TARGET)
 
-.PHONY: clean
+.PHONY: clean run
+run:
+	exec $(TARGET)
 clean:
 	rm -rf build/*

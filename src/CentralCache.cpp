@@ -1,6 +1,5 @@
 #include "CentralCache.h"
 
-#include "Common.h"
 #include "PageHeap.h"
 
 // 从ThreadCache插入批量对应大小的对象
@@ -15,7 +14,7 @@ void CentralCache::InsertRange(void* start, void* end, size_t objSize) {
   void* cur = start;
   while (cur != nullptr) {
     ReleaseToSpans(list, cur);
-    cur = Next(cur);
+    cur = FreeList::Next(cur);
   }
 
   list.Mutex().unlock();
@@ -34,12 +33,12 @@ size_t CentralCache::RemoveRange(void*& start, void*& end, size_t batchNum, size
 
   size_t actualNum = 1;
   start = end = span->_freeList;
-  for (size_t i = 0; i < batchNum - 1 && Next(end) != nullptr; ++i) {
-    end = Next(end);
+  for (size_t i = 0; i < batchNum - 1 && FreeList::Next(end) != nullptr; ++i) {
+    end = FreeList::Next(end);
     ++actualNum;
   }
-  span->_freeList = Next(end);
-  Next(end) = nullptr;
+  span->_freeList = FreeList::Next(end);
+  FreeList::Next(end) = nullptr;
 
   span->_useCount += actualNum;
   list.Mutex().unlock();
@@ -68,11 +67,11 @@ Span* CentralCache::AllocateSpan(SpanList& list, size_t objSize) {
   char* prev = start;
   char* cur = start + objSize;
   while (cur < end) {
-    Next(prev) = cur;
+    FreeList::Next(prev) = cur;
     prev = cur;
     cur += objSize;
   }
-  Next(prev) = nullptr;
+  FreeList::Next(prev) = nullptr;
 
   // 切分Span时无需加锁，要挂入SpanList前再加桶锁
   list.Mutex().lock();
@@ -89,12 +88,14 @@ void CentralCache::DeallocateSpans(SpanList& list, Span* span) {
   span->_prev = nullptr;
   span->_next = nullptr;
   span->_freeList = nullptr;
-  span->_inUse = false;
+
   list.Mutex().unlock();
 
   PageHeap::Instance().Mutex().lock();
   PageHeap::Instance().Delete(span);
   PageHeap::Instance().Mutex().unlock();
+
+  span->_inUse = false;
 
   list.Mutex().lock();
 }
@@ -119,7 +120,7 @@ void CentralCache::ReleaseToSpans(SpanList& list, void* obj) {
   assert(obj);
 
   Span* span = PageHeap::Instance().ObjectToSpan(obj);
-  Next(obj) = span->_freeList;
+  FreeList::Next(obj) = span->_freeList;
   span->_freeList = obj;
   --span->_useCount;
 

@@ -1,7 +1,5 @@
 #include "PageHeap.h"
 
-#include "Common.h"
-
 // 分配一个对应大小的Span到CentralCache
 Span* PageHeap::New(size_t pages) {
   assert(pages <= PAGE_NUM);
@@ -34,7 +32,7 @@ Span* PageHeap::New(size_t pages) {
   }
 
   // 若全为空，则向系统申请一个大Span
-  void* ptr = SystemAlloc(PAGE_NUM);
+  void* ptr = SystemAllocator::Alloc(PAGE_NUM);
   Span* hugeSpan = spanPool.New();
 
   hugeSpan->_start = (uintptr_t)ptr >> PAGE_SHIFT;
@@ -44,7 +42,7 @@ Span* PageHeap::New(size_t pages) {
   _idSpanMap[hugeSpan->_start + hugeSpan->_size - 1] = hugeSpan;
 
   _spanLists[hugeSpan->_size].PushFront(hugeSpan);
-  return New(pages);  // 递归妙用
+  return New(pages);  // 递归复用
 }
 
 // 从CentralCache释放一个对应大小的Span
