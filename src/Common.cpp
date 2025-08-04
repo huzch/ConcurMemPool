@@ -1,7 +1,5 @@
 #include "Common.h"
 
-std::unordered_map<void*, uintptr_t> SystemAllocator::_ptrSizeMap;
-
 // 向堆申请空间
 void* SystemAllocator::Alloc(size_t pages) {
 #ifdef _WIN32
@@ -16,18 +14,16 @@ void* SystemAllocator::Alloc(size_t pages) {
   if (ptr == nullptr) {
     throw std::bad_alloc();
   }
-  _ptrSizeMap[ptr] = pages << PAGE_SHIFT;
   return ptr;
 }
 
 // 向堆释放空间
-void SystemAllocator::Free(void* ptr) {
+void SystemAllocator::Free(void* ptr, size_t pages) {
 #ifdef _WIN32
   VirtualFree(ptr, 0, MEM_RELEASE);
 #else  // linux/macOS下用munmap分配内存
-  munmap(ptr, _ptrSizeMap[ptr]);
+  munmap(ptr, pages << PAGE_SHIFT);
 #endif
-  _ptrSizeMap.erase(ptr);
 }
 
 // 在每个内存块（对象）头部存储指针，指针大小兼容32位和64位平台
@@ -41,6 +37,7 @@ void FreeList::Push(void* obj) {
 }
 
 void* FreeList::Pop() {
+  assert(_freeList);
   void* obj = _freeList;
   _freeList = Next(obj);
   --_size;

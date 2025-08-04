@@ -7,6 +7,7 @@ class ObjectPool {
  public:
   // 每次分配对象大小的内存
   T *New() {
+    std::lock_guard<std::mutex> lock(_mutex);
     T *obj = nullptr;
 
     if (_freeList) {  // 利用空闲回收内存
@@ -35,6 +36,7 @@ class ObjectPool {
 
   void Delete(T *obj) {
     assert(obj);
+    std::lock_guard<std::mutex> lock(_mutex);
     obj->~T();  // 调用析构函数清理对象资源
 
     // 在回收内存的头部存储指针，将所有回收内存链接起来
@@ -46,4 +48,5 @@ class ObjectPool {
   char *_memory = nullptr;    // 大块分配内存
   size_t _remainBytes = 0;    // 大块分配内存的剩余字节数
   void *_freeList = nullptr;  // 回收内存
+  std::mutex _mutex;
 };

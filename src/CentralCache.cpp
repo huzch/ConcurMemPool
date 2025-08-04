@@ -13,8 +13,9 @@ void CentralCache::InsertRange(void* start, void* end, size_t objSize) {
 
   void* cur = start;
   while (cur != nullptr) {
-    ReleaseToSpans(list, cur);
-    cur = FreeList::Next(cur);
+    void* next = FreeList::Next(cur);
+    ReleaseToSpans(list, cur);  // 此处内部会改变cur的指向，所以要提前存储
+    cur = next;
   }
 
   list.Mutex().unlock();
@@ -56,7 +57,6 @@ Span* CentralCache::AllocateSpan(SpanList& list, size_t objSize) {
   PageHeap::Instance().Mutex().unlock();
 
   span->_objSize = objSize;
-  span->_inUse = true;
 
   // 计算Span管理的大块内存的首尾地址
   char* start = (char*)(span->_start << PAGE_SHIFT);
@@ -71,6 +71,7 @@ Span* CentralCache::AllocateSpan(SpanList& list, size_t objSize) {
     prev = cur;
     cur += objSize;
   }
+  // 最后一块对象如果小于objSize怎么办，到时候分配的时候大小不够？
   FreeList::Next(prev) = nullptr;
 
   // 切分Span时无需加锁，要挂入SpanList前再加桶锁
@@ -94,8 +95,6 @@ void CentralCache::DeallocateSpans(SpanList& list, Span* span) {
   PageHeap::Instance().Mutex().lock();
   PageHeap::Instance().Delete(span);
   PageHeap::Instance().Mutex().unlock();
-
-  span->_inUse = false;
 
   list.Mutex().lock();
 }

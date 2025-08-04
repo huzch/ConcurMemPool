@@ -7,26 +7,20 @@ void* ConcurAlloc(size_t bytes) {
     if (pThreadCache == nullptr) {
       pThreadCache = tcPool.New();
     }
-    cout << std::this_thread::get_id() << ":" << pThreadCache << endl;
+    // cout << std::this_thread::get_id() << ":" << pThreadCache << endl;
     return pThreadCache->Allocate(bytes);
   }
   // 大于256KB但小于1024KB(128页)，直接向PageHeap申请
-  else if (bytes <= (PAGE_NUM << PAGE_SHIFT)) {
+  // 大于1024KB(128页)，直接向堆申请
+  else {
     size_t pages = SizeMap::RoundUp(bytes) >> PAGE_SHIFT;
 
     PageHeap::Instance().Mutex().lock();
     Span* span = PageHeap::Instance().New(pages);
     PageHeap::Instance().Mutex().unlock();
 
-    span->_inUse = true;
-
     void* ptr = (void*)(span->_start << PAGE_SHIFT);
     return ptr;
-  }
-  // 大于1024KB(128页)，直接向堆申请
-  else {
-    size_t pages = SizeMap::RoundUp(bytes) >> PAGE_SHIFT;
-    return SystemAllocator::Alloc(pages);
   }
 }
 
@@ -43,15 +37,10 @@ void ConcurFree(void* ptr) {
     pThreadCache->Deallocate(ptr, objSize);
   }
   // 大于256KB但小于1024KB(128页)，直接向PageHeap释放
-  else if (objSize <= (PAGE_NUM << PAGE_SHIFT)) {
+  // 大于1024KB(128页)，直接向堆释放
+  else {
     PageHeap::Instance().Mutex().lock();
     PageHeap::Instance().Delete(span);
     PageHeap::Instance().Mutex().unlock();
-
-    span->_inUse = false;
-  }
-  // 大于1024KB(128页)，直接向堆释放
-  else {
-    SystemAllocator::Free(ptr);
   }
 }

@@ -27,11 +27,7 @@ class SystemAllocator {
   // 向堆申请空间
   static void* Alloc(size_t pages);
   // 向堆释放空间
-  static void Free(void* ptr);
-
- private:
-  static std::unordered_map<void*, uintptr_t>
-      _ptrSizeMap;  //<内存指针,内存大小>，用于映射直接向堆申请的内存
+  static void Free(void* ptr, size_t bytes);
 };
 
 // 以小块内存（对象）为单位的单向链表

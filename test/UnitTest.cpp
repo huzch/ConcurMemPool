@@ -76,8 +76,8 @@ void TestConcurAlloc2() {
   ConcurFree(p4);
 }
 
-int main() {
-  // TestObjectPool();
-  TestConcurAlloc1();
-  return 0;
-}
+// int main() {
+//   // TestObjectPool();
+//   TestConcurAlloc1();
+//   return 0;
+// }
