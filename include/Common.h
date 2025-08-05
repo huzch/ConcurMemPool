@@ -6,11 +6,11 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <iostream>
 #include <mutex>
 #include <thread>
-#include <unordered_map>
 #include <vector>
 
 using std::cout;
@@ -20,12 +20,13 @@ static const size_t MAX_BYTES = 256 << 10;
 static const size_t LIST_NUM = 256;
 static const size_t PAGE_NUM = 128;
 static const size_t PAGE_SHIFT = 13;
+static const size_t ADDRESS_BITS = sizeof(void*) << 3;
 
 // 用于向操作系统申请与释放内存
 class SystemAllocator {
  public:
   // 向堆申请空间
-  static void* Alloc(size_t pages);
+  static void* Alloc(size_t bytes);
   // 向堆释放空间
   static void Free(void* ptr, size_t bytes);
 };

@@ -5,11 +5,11 @@ Span* PageHeap::New(size_t pages) {
   // 直接向堆申请
   if (pages > PAGE_NUM) {
     Span* span = spanPool.New();
-    void* ptr = SystemAllocator::Alloc(pages);
+    void* ptr = SystemAllocator::Alloc(pages << PAGE_SHIFT);
 
     span->_start = (uintptr_t)ptr >> PAGE_SHIFT;
     span->_size = pages;
-    _idSpanMap[span->_start] = span;
+    _idSpanMap.set(span->_start, span);
 
     span->_inUse = true;
     return span;
@@ -30,7 +30,7 @@ Span* PageHeap::New(size_t pages) {
         kSpan->_size = pages;
         // 标记页映射
         for (size_t i = 0; i < kSpan->_size; ++i) {
-          _idSpanMap[kSpan->_start + i] = kSpan;
+          _idSpanMap.set(kSpan->_start + i, kSpan);
         }
 
         nSpan->_start += pages;
@@ -44,14 +44,14 @@ Span* PageHeap::New(size_t pages) {
   }
 
   // 若全为空，则向系统申请一个大Span
-  void* ptr = SystemAllocator::Alloc(PAGE_NUM);
+  void* ptr = SystemAllocator::Alloc(PAGE_NUM << PAGE_SHIFT);
   Span* hugeSpan = spanPool.New();
 
   hugeSpan->_start = (uintptr_t)ptr >> PAGE_SHIFT;
   hugeSpan->_size = PAGE_NUM;
   // 标记页映射
   for (size_t i = 0; i < hugeSpan->_size; ++i) {
-    _idSpanMap[hugeSpan->_start + i] = hugeSpan;
+    _idSpanMap.set(hugeSpan->_start + i, hugeSpan);
   }
 
   _spanLists[hugeSpan->_size].PushFront(hugeSpan);
@@ -65,7 +65,7 @@ void PageHeap::Delete(Span* span) {
   size_t pages = span->_size;
   if (pages > PAGE_NUM) {
     void* ptr = (void*)(span->_start << PAGE_SHIFT);
-    SystemAllocator::Free(ptr, pages);
+    SystemAllocator::Free(ptr, pages << PAGE_SHIFT);
     spanPool.Delete(span);
     return;
   }
@@ -73,12 +73,11 @@ void PageHeap::Delete(Span* span) {
   // 向前合并
   while (true) {
     uintptr_t prevId = span->_start - 1;
-    if (!_idSpanMap.count(prevId)) {
-      break;
-    }
+    Span* prevSpan = (Span*)_idSpanMap.get(prevId);
 
-    Span* prevSpan = _idSpanMap[prevId];
-    if (prevSpan->_inUse) {
+    if (prevSpan == nullptr) {
+      break;
+    } else if (prevSpan->_inUse) {
       break;
     } else if (prevSpan->_size + span->_size > PAGE_NUM) {
       break;
@@ -93,12 +92,11 @@ void PageHeap::Delete(Span* span) {
   // 向后合并
   while (true) {
     uintptr_t nextId = span->_start + span->_size;
-    if (!_idSpanMap.count(nextId)) {
-      break;
-    }
+    Span* nextSpan = (Span*)_idSpanMap.get(nextId);
 
-    Span* nextSpan = _idSpanMap[nextId];
-    if (nextSpan->_inUse) {
+    if (nextSpan == nullptr) {
+      break;
+    } else if (nextSpan->_inUse) {
       break;
     } else if (nextSpan->_size + span->_size > PAGE_NUM) {
       break;
@@ -112,7 +110,7 @@ void PageHeap::Delete(Span* span) {
 
   // 标记页映射
   for (size_t i = 0; i < span->_size; ++i) {
-    _idSpanMap[span->_start + i] = span;
+    _idSpanMap.set(span->_start + i, span);
   }
   _spanLists[span->_size].PushFront(span);
   span->_inUse = false;
@@ -121,10 +119,10 @@ void PageHeap::Delete(Span* span) {
 // 将对象Object映射到对应的Span
 Span* PageHeap::ObjectToSpan(void* obj) {
   assert(obj);
-  std::lock_guard<std::mutex> lock(_mutex);
+  // 基数树PageMap读写分离，所以可以无锁访问
   // 计算对象所属页号
   uintptr_t start = (uintptr_t)obj >> PAGE_SHIFT;
-  return _idSpanMap[start];
+  return (Span*)_idSpanMap.get(start);
 }
 
 std::mutex& PageHeap::Mutex() { return _mutex; }

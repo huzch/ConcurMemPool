@@ -1,5 +1,6 @@
 #pragma once
 #include "Common.h"
+#include "PageMap.hpp"
 
 // 单例模式 -- 懒汉式
 class PageHeap {
@@ -18,12 +19,12 @@ class PageHeap {
   std::mutex& Mutex();
 
  private:
-  PageHeap() {}
+  PageHeap() : _idSpanMap(SystemAllocator::Alloc) {}
   PageHeap(const PageHeap&) = delete;
   PageHeap& operator=(const PageHeap&) = delete;
 
  private:
   SpanList _spanLists[PAGE_NUM + 1];
-  std::unordered_map<uintptr_t, Span*> _idSpanMap;  //<页号,Span*>
+  PageMap3<ADDRESS_BITS - PAGE_SHIFT> _idSpanMap;  //<页号,Span*>
   std::mutex _mutex;
 };

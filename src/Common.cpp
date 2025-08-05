@@ -1,12 +1,11 @@
 #include "Common.h"
 
 // 向堆申请空间
-void* SystemAllocator::Alloc(size_t pages) {
+void* SystemAllocator::Alloc(size_t bytes) {
 #ifdef _WIN32
-  void* ptr = VirtualAlloc(0, pages << PAGE_SHIFT, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+  void* ptr = VirtualAlloc(0, bytes, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 #else  // linux/macOS下用mmap分配内存
-  void* ptr = mmap(nullptr, pages << PAGE_SHIFT, PROT_READ | PROT_WRITE,
-                   MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  void* ptr = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   if (ptr == MAP_FAILED) {
     ptr = nullptr;
   }
@@ -18,11 +17,11 @@ void* SystemAllocator::Alloc(size_t pages) {
 }
 
 // 向堆释放空间
-void SystemAllocator::Free(void* ptr, size_t pages) {
+void SystemAllocator::Free(void* ptr, size_t bytes) {
 #ifdef _WIN32
   VirtualFree(ptr, 0, MEM_RELEASE);
 #else  // linux/macOS下用munmap分配内存
-  munmap(ptr, pages << PAGE_SHIFT);
+  munmap(ptr, bytes);
 #endif
 }
 

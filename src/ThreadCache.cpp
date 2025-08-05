@@ -54,14 +54,14 @@ void ThreadCache::ReleaseToCentralCache(FreeList& list, size_t objSize) {
   assert(objSize <= MAX_BYTES);
 
   size_t& maxSize = list.MaxSize();
-  size_t batchNum = std::min(SizeMap::ObjectMoveNum(objSize), maxSize);
-  if (batchNum == maxSize) {
-    ++maxSize;
-  }
+  // size_t batchNum = std::min(SizeMap::ObjectMoveNum(objSize), maxSize);
+  // if (batchNum == maxSize) {
+  //   ++maxSize;
+  // }
 
   void* start = nullptr;
   void* end = nullptr;
-  list.PopRange(start, end, batchNum);
+  list.PopRange(start, end, maxSize);
 
   CentralCache::Instance().InsertRange(start, end, objSize);
 }
